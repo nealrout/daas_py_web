@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h2 { color: #333; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Data Dashboard</h1>
+
+    <h2>Account Data</h2>
+    <pre>{{ account | safe }}</pre>
+
+    <h2>Facility Data</h2>
+    <pre>{{ facility | safe }}</pre>
+
+    <h2>Asset Data</h2>
+    <pre>{{ asset | safe }}</pre>
+
+    <h2>Service Data</h2>
+    <pre>{{ service | safe }}</pre>
+</body>
+</html>
