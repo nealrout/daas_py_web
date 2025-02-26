@@ -3,26 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Dashboard</title>
+    <title>User Facility Management</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h2 { color: #333; }
-        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+        .container { display: flex; gap: 20px; }
+        .box { border: 1px solid #000; padding: 10px; width: 30%; }
+        .button { margin-top: 10px; }
     </style>
 </head>
 <body>
-    <h1>Data Dashboard</h1>
+    <input type="hidden" id="csrf_token" value="{{ csrf_token }}">
+    <h1>User Facility Management</h1>
+    <div class="container">
+        <div class="box">
+            <h3>Users</h3>
+            <select id="userList" size="10"></select>
+        </div>
+        <div class="box">
+            <h3>Facilities</h3>
+            <select id="facilityList" size="10" multiple></select>
+        </div>
+        <div class="box">
+            <h3>Assigned Facilities</h3>
+            <select id="assignedFacilityList" size="10" multiple></select>
+            <button class="button" id="assignFacilities">Assign Selected</button>
+        </div>
+    </div>
 
-    <h2>Account Data</h2>
-    <pre>{{ account | safe }}</pre>
+    <script>
+        $(document).ready(function() {
+            fetchUsers();
+            fetchFacilities();
 
-    <h2>Facility Data</h2>
-    <pre>{{ facility | safe }}</pre>
+            $('#userList').change(function() {
+                fetchUserFacilities($(this).val());
+            });
 
-    <h2>Asset Data</h2>
-    <pre>{{ asset | safe }}</pre>
+            $('#assignFacilities').click(function() {
+                assignFacilities();
+            });
+        });
 
-    <h2>Service Data</h2>
-    <pre>{{ service | safe }}</pre>
+        function fetchUsers() {
+            $.get('/get_users/', function(data) {
+                $('#userList').empty();
+                data.forEach(user => {
+                    $('#userList').append(`<option value="${user.username}">${user.username}</option>`);
+                });
+            });
+        }
+
+        function fetchFacilities() {
+            $.get('/get_facilities/', function(data) {
+                $('#facilityList').empty();
+                data.forEach(facility => {
+                    $('#facilityList').append(`<option value="${facility.facility_nbr}">${facility.facility_nbr}</option>`);
+                });
+            });
+        }
+
+        function fetchUserFacilities(username) {
+            $.get(`/get_user_facilities/${username}/`, function(data) {
+                $('#assignedFacilityList').empty();
+                data.forEach(facility => {
+                    $('#assignedFacilityList').append(`<option value="${facility.facility_nbr}">${facility.facility_nbr}</option>`);
+                });
+            });
+        }
+
+        function assignFacilities() {
+            let username = $('#userList').val();
+            let selectedFacilities = $('#facilityList').val();
+            let csrfToken = $('#csrf_token').val(); // Retrieve CSRF token
+
+            if (!username || !selectedFacilities.length) {
+                alert("Please select a user and at least one facility.");
+                return;
+            }
+
+            $.ajax({
+                url: '/update_user_facilities/',
+                type: 'POST',
+                data: {
+                    username: username,
+                    "facility_nbr[]": selectedFacilities
+                },
+                headers: { "X-CSRFToken": csrfToken }, // Include CSRF token in headers
+                success: function(response) {
+                    alert("Facilities assigned successfully!");
+                    fetchUserFacilities(username);
+                },
+                error: function(xhr) {
+                    alert("Error: " + xhr.responseText);
+                }
+            });
+        }
+        // function assignFacilities() {
+        //     let username = $('#userList').val();
+        //     let selectedFacilities = $('#facilityList').val();
+
+        //     if (!username || !selectedFacilities.length) {
+        //         alert("Please select a user and at least one facility.");
+        //         return;
+        //     }
+
+        //     $.post('/update_user_facilities/', {
+        //         username: username,
+        //         "facility_nbr[]": selectedFacilities
+        //     }, function(response) {
+        //         alert("Facilities assigned successfully!");
+        //         fetchUserFacilities(username);
+        //     });
+        // }
+    </script>
 </body>
 </html>

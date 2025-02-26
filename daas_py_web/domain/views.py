@@ -4,13 +4,33 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from requests.auth import HTTPBasicAuth
 from manage import logger, config
+from django.http import JsonResponse
+
+configs = config.get_configs()
 
 API_BASE_URL = "http://127.0.0.1"
-LOGIN_URL = f"{API_BASE_URL}:9000/api/auth/login/"
-ACCOUNT_URL = f"{API_BASE_URL}:9001/api/account/db/?facility=ALL"
-FACILITY_URL = f"{API_BASE_URL}:9002/api/facility/db/?facility=ALL"
-ASSET_URL = f"{API_BASE_URL}:9003/api/asset/db/?facility=ALL"
-SERVICE_URL = f"{API_BASE_URL}:9004/api/service/db/?facility=ALL"
+API_PORTS = {
+    "auth": int(configs.AUTH_PORT),
+    "account": int(configs.DOMAIN_PORT_ACCOUNT),
+    "facility": int(configs.DOMAIN_PORT_FACILITY),
+    "asset": int(configs.DOMAIN_PORT_ASSET),
+    "service": int(configs.DOMAIN_PORT_SERVICE),
+    "user": int(configs.DOMAIN_PORT_USER),
+    "userfacility": int(configs.DOMAIN_PORT_USERFACILITY),
+}
+
+API_ENDPOINTS = {
+    "LOGIN": f"{API_BASE_URL}:{API_PORTS['auth']}/api/auth/login/",
+    "ACCOUNT_SEARCH": f"{API_BASE_URL}:{API_PORTS['account']}/api/account/db/?facility=ALL",
+    "ASSET_SEARCH": f"{API_BASE_URL}:{API_PORTS['asset']}/api/asset/db/?facility=ALL",
+    "SERVICE_SEARCH": f"{API_BASE_URL}:{API_PORTS['service']}/api/service/db/?facility=ALL",
+    "FACILITY_SEARCH": f"{API_BASE_URL}:{API_PORTS['facility']}/api/facility/db/?facility=ALL",
+    "FACILITY_UPSERT": f"{API_BASE_URL}:{API_PORTS['facility']}/api/facility/db/upsert/?facility=ALL",
+    "USER_SEARCH": f"{API_BASE_URL}:{API_PORTS['user']}/api/user/db/?facility=ALL",
+    "USER_UPSERT": f"{API_BASE_URL}:{API_PORTS['user']}/api/user/db/upsert/?facility=ALL",
+    "USERFACILITY_SEARCH": f"{API_BASE_URL}:{API_PORTS['userfacility']}/api/userfacility/db/?facility=ALL",
+    "USERFACILITY_UPSERT": f"{API_BASE_URL}:{API_PORTS['userfacility']}/api/userfacility/db/upsert/?facility=ALL",
+}
 
 def login_view(request):
     if request.method == "POST":
@@ -26,7 +46,7 @@ def login_view(request):
         headers = {"Authorization": f"Basic {encoded_credentials}"}
 
         # Send login request with Basic Authentication
-        response = requests.post(LOGIN_URL, headers=headers)
+        response = requests.post(API_ENDPOINTS["LOGIN"], headers=headers)
 
         if response.status_code == 200:
             data = response.json()
@@ -45,14 +65,13 @@ def login_view(request):
 
     return render(request, "login.html")
 
-
 def fetch_data(endpoint, request):
     """Fetch data from the API using the stored access token."""
     token = request.session.get("auth_token")
     if not token:
         return {"error": "User is not authenticated"}
 
-    headers = {"Authorization": f"Bearer {token}"}  # Add Bearer token authentication
+    headers = {"Authorization": f"Bearer {token}"}
 
     logger.debug(f"URL: {endpoint}")
     response = requests.get(f"{endpoint}", headers=headers)
@@ -71,16 +90,15 @@ def dashboard_view(request):
         return redirect("login")  # Redirect to login if not authenticated
 
     context = {
-        "account": fetch_data(ACCOUNT_URL, request),
-        "facility": fetch_data(FACILITY_URL, request),
-        "asset": fetch_data(ASSET_URL, request),
-        "service": fetch_data(SERVICE_URL, request),
+        "account": fetch_data(API_ENDPOINTS["ACCOUNT_SEARCH"], request),
+        "facility": fetch_data(API_ENDPOINTS["FACILITY_SEARCH"], request),
+        "asset": fetch_data(API_ENDPOINTS["ASSET_SEARCH"], request),
+        "service": fetch_data(API_ENDPOINTS["SERVICE_SEARCH"], request),
     }
 
     return render(request, "dashboard.html", context)
 
     return render(request, "dashboard.html", context)
-
 
 def logout_view(request):
     """Logout and clear session."""
@@ -88,3 +106,59 @@ def logout_view(request):
     messages.success(request, "Logged out successfully!")
     return redirect("login")
 
+def index(request):
+    token = request.session.get("auth_token")
+    if not token:
+        return redirect("login") 
+    
+    return render(request, 'index.html')
+
+def get_users(request):
+    token = request.session.get("auth_token")
+    if not token:
+        return {"error": "User is not authenticated"}
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = requests.post(API_ENDPOINTS["USER_SEARCH"], json={}, headers=headers)
+    users = response.json() if response.status_code == 200 else []
+    return JsonResponse(users, safe=False)
+
+def get_facilities(request):
+    token = request.session.get("auth_token")
+    if not token:
+        return {"error": "User is not authenticated"}
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = requests.post(API_ENDPOINTS["FACILITY_SEARCH"], headers=headers, json={})
+    facilities = response.json() if response.status_code == 200 else []
+    return JsonResponse(facilities, safe=False)
+
+def get_user_facilities(request, username):
+    token = request.session.get("auth_token")
+    if not token:
+        return {"error": "User is not authenticated"}
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = requests.post(API_ENDPOINTS["USERFACILITY_SEARCH"], headers=headers, json={"username": [username]})
+    user_facilities = response.json() if response.status_code == 200 else []
+    return JsonResponse(user_facilities, safe=False)
+
+def update_user_facilities(request):
+    token = request.session.get("auth_token")
+    if not token:
+        return {"error": "User is not authenticated"}
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    if request.method == "POST":
+        data = request.POST
+        username = data.get("username")
+        facility_nbr = request.POST.getlist("facility_nbr[]")
+        
+        response = requests.post(API_ENDPOINTS["USERFACILITY_UPSERT"], headers=headers, json={"username": username, "facility_nbr": facility_nbr})
+        return JsonResponse(response.json(), safe=False)
+    
+    return JsonResponse({"error": "Invalid request"}, status=400)
