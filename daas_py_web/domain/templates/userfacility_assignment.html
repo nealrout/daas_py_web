@@ -45,7 +45,7 @@
         });
 
         function fetchUsers() {
-            $.get('/get_users/', function(data) {
+            $.get('/get_user/', function(data) {
                 $('#userList').empty();
                 data.forEach(user => {
                     $('#userList').append(`<option value="${user.username}">${user.username}</option>`);
@@ -54,7 +54,7 @@
         }
 
         function fetchFacilities() {
-            $.get('/get_facilities/', function(data) {
+            $.get('/get_facility/', function(data) {
                 $('#facilityList').empty();
                 data.forEach(facility => {
                     $('#facilityList').append(`<option value="${facility.facility_nbr}">${facility.facility_nbr}</option>`);
@@ -63,7 +63,7 @@
         }
 
         function fetchUserFacilities(username) {
-            $.get(`/get_user_facilities/${username}/`, function(data) {
+            $.get(`/get_user_facility/${username}/`, function(data) {
                 $('#assignedFacilityList').empty();
                 data.forEach(facility => {
                     $('#assignedFacilityList').append(`<option value="${facility.facility_nbr}">${facility.facility_nbr}</option>`);
@@ -82,7 +82,7 @@
             }
 
             $.ajax({
-                url: '/update_user_facilities/',
+                url: '/update_user_facility/',
                 type: 'POST',
                 data: {
                     username: username,
@@ -98,23 +98,6 @@
                 }
             });
         }
-        // function assignFacilities() {
-        //     let username = $('#userList').val();
-        //     let selectedFacilities = $('#facilityList').val();
-
-        //     if (!username || !selectedFacilities.length) {
-        //         alert("Please select a user and at least one facility.");
-        //         return;
-        //     }
-
-        //     $.post('/update_user_facilities/', {
-        //         username: username,
-        //         "facility_nbr[]": selectedFacilities
-        //     }, function(response) {
-        //         alert("Facilities assigned successfully!");
-        //         fetchUserFacilities(username);
-        //     });
-        // }
     </script>
 </body>
 </html>
