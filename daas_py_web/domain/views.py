@@ -21,7 +21,8 @@ API_PORTS = {
 
 API_ENDPOINTS = {
     "LOGIN": f"{API_BASE_URL}:{API_PORTS['auth']}/api/auth/login/",
-    "ACCOUNT_SEARCH": f"{API_BASE_URL}:{API_PORTS['account']}/api/account/db/?facility=ALL",
+    # "ACCOUNT_SEARCH": f"{API_BASE_URL}:{API_PORTS['account']}/api/account/db/?facility=ALL",
+    "ACCOUNT_SEARCH": f"{API_BASE_URL}:{API_PORTS['account']}/api/account/cache/query?facility=ALL",
     "ASSET_SEARCH": f"{API_BASE_URL}:{API_PORTS['asset']}/api/asset/db/?facility=ALL",
     "SERVICE_SEARCH": f"{API_BASE_URL}:{API_PORTS['service']}/api/service/db/?facility=ALL",
     "FACILITY_SEARCH": f"{API_BASE_URL}:{API_PORTS['facility']}/api/facility/db/?facility=ALL",
@@ -40,54 +41,99 @@ def login_view(request):
         if not username or not password:
             messages.error(request, "Username and password are required.")
             return render(request, "login.html")
-        
+
         credentials = f"{username}:{password}"
         encoded_credentials = base64.b64encode(credentials.encode("utf-8")).decode("utf-8")
         headers = {"Authorization": f"Basic {encoded_credentials}"}
 
-        # Send login request with Basic Authentication
-        response = requests.post(API_ENDPOINTS["LOGIN"], headers=headers)
+        try:
+            response = requests.post(API_ENDPOINTS["LOGIN"], headers=headers)
+            response.raise_for_status()
 
-        if response.status_code == 200:
             data = response.json()
-            access_token = data.get("access")  # Extract the access token
-            refresh_token = data.get("refresh")  # (Optional) Store refresh token if needed
+            access_token = data.get("access")
+            refresh_token = data.get("refresh")
 
             if access_token:
-                request.session["auth_token"] = access_token  # Store the token in session
-                request.session["refresh_token"] = refresh_token  # Store refresh token for later use
+                request.session["auth_token"] = access_token
+                request.session["refresh_token"] = refresh_token
                 messages.success(request, "Login successful!")
-                return redirect("dashboard")  # Redirect to the dashboard
+                return redirect("dashboard")
             else:
                 messages.error(request, "Login failed. No access token received.")
-        else:
-            messages.error(request, "Invalid credentials. Please try again.")
+
+        except requests.exceptions.RequestException as e:
+            logger.exception(f"❌Login request failed: {e}")
+            messages.error(request, "Failed to connect to authentication service. Please try again.")
+        
+        except Exception as e:
+            logger.exception(f"❌Unexpected error in login_view: {e}")
+            messages.error(request, "An unexpected error occurred. Please try again.")
 
     return render(request, "login.html")
 
 def fetch_data(endpoint, request):
-    """Fetch data from the API using the stored access token."""
     token = request.session.get("auth_token")
     if not token:
         return {"error": "User is not authenticated"}
 
     headers = {"Authorization": f"Bearer {token}"}
 
-    logger.debug(f"URL: {endpoint}")
-    response = requests.get(f"{endpoint}", headers=headers)
-
-    print(response)
-    if response.status_code == 200:
+    try:
+        logger.debug(f"Fetching data from: {endpoint}")
+        response = requests.get(endpoint, headers=headers)
+        response.raise_for_status()
         return response.json()
-    elif response.status_code == 401:  # Token expired or unauthorized
-        return {"error": "Unauthorized. Please log in again."}
-    return {"error": "Failed to retrieve data"}
+    
+    except requests.exceptions.RequestException as e:
+        logger.exception(f"❌Failed to fetch data from {endpoint}: {e}")
+        return {"error": "Failed to retrieve data"}
+    
+    except Exception as e:
+        logger.exception(f"❌Unexpected error in fetch_data: {e}")
+        return {"error": "An unexpected error occurred"}
 
 def dashboard_view(request):
-    """Display dashboard after successful login."""
+    """Render the dashboard page with tabbed navigation"""
+    if not request.session.get("auth_token"):
+        return redirect("login")
+    return render(request, "dashboard.html")
+
+def fetch_tab_data(request, tab_name):
+    """Fetch data based on the selected tab (Account, Facility, Asset, Service)"""
+    if tab_name.upper()+"_SEARCH" not in API_ENDPOINTS:
+        return JsonResponse({"error": "Invalid tab selected"}, status=400)
+    
+    search_query = request.GET.get("search", "").strip()
+
+    payload = {"q": "*:*", "rows": configs.SOLR_MAX_ROW}
+
+    if tab_name.upper() == configs.DOMAIN_NAME_ACCOUNT:
+        if search_query:
+            fq = {"fq": f"account_nbr:(*{search_query}*) OR account_code:(*{search_query}*) OR account_name:(*{search_query}*)"}
+            payload = {**payload, **fq} 
+
+        logger.debug(f"payload: {payload}")
+        return fetch_json_response_cache(tab_name.upper() + "_SEARCH", request, payload)
+        
+    elif tab_name.upper() == configs.DOMAIN_NAME_FACILITY:
+        logger.debug("")
+    elif tab_name.upper() == configs.DOMAIN_NAME_ASSET:
+        logger.debug("")
+    elif tab_name.upper() == configs.DOMAIN_NAME_SERVICE:
+        logger.debug("")
+
+    # payload = {"search": search_query} if search_query else {}
+    
+    logger.debug(f"search_query: {search_query}")
+    # logger.debug(f"search payload: {payload}")
+    
+    return fetch_json_response_db(tab_name.upper() + "_SEARCH", request)
+
+def dashboard_og_view(request):
     token = request.session.get("auth_token")
     if not token:
-        return redirect("login")  # Redirect to login if not authenticated
+        return redirect("login")
 
     context = {
         "account": fetch_data(API_ENDPOINTS["ACCOUNT_SEARCH"], request),
@@ -96,69 +142,117 @@ def dashboard_view(request):
         "service": fetch_data(API_ENDPOINTS["SERVICE_SEARCH"], request),
     }
 
-    return render(request, "dashboard.html", context)
-
-    return render(request, "dashboard.html", context)
+    return render(request, "dashboard_og.html", context)
 
 def logout_view(request):
-    """Logout and clear session."""
-    request.session.flush()  # Clear session data
-    messages.success(request, "Logged out successfully!")
+    """Logs out the user and clears the session."""
+    try:
+        request.session.flush()
+        messages.success(request, "Logged out successfully!")
+    except Exception as e:
+        logger.exception(f"❌Logout error: {e}")
+        messages.error(request, "An error occurred while logging out.")
     return redirect("login")
 
 def index(request):
     token = request.session.get("auth_token")
     if not token:
-        return redirect("login") 
-    
-    return render(request, 'index.html')
+        return redirect("login")  
+    return render(request, "index.html")
 
-def get_users(request):
+def userfacility_assignment(request):
+    """Handles the index page and redirects to login if unauthenticated."""
     token = request.session.get("auth_token")
     if not token:
-        return {"error": "User is not authenticated"}
+        return redirect("login")  
+    return render(request, "userfacility_assignment.html")
 
-    headers = {"Authorization": f"Bearer {token}"}
 
-    response = requests.post(API_ENDPOINTS["USER_SEARCH"], json={}, headers=headers)
-    users = response.json() if response.status_code == 200 else []
-    return JsonResponse(users, safe=False)
+def get_account(request):
+    return fetch_json_response_db("ACCOUNT_SEARCH", request)
 
-def get_facilities(request):
-    token = request.session.get("auth_token")
-    if not token:
-        return {"error": "User is not authenticated"}
+def get_facility(request):
+    return fetch_json_response_db("FACILITY_SEARCH", request)
 
-    headers = {"Authorization": f"Bearer {token}"}
+def get_asset(request):
+    return fetch_json_response_db("ASSET_SEARCH", request)
 
-    response = requests.post(API_ENDPOINTS["FACILITY_SEARCH"], headers=headers, json={})
-    facilities = response.json() if response.status_code == 200 else []
-    return JsonResponse(facilities, safe=False)
+def get_service(request):
+    return fetch_json_response_db("SERVICE_SEARCH", request)
 
-def get_user_facilities(request, username):
-    token = request.session.get("auth_token")
-    if not token:
-        return {"error": "User is not authenticated"}
+def get_user(request):
+    return fetch_json_response_db("USER_SEARCH", request)
 
-    headers = {"Authorization": f"Bearer {token}"}
+def get_user_facility(request, username):
+    return fetch_json_response_db("USERFACILITY_SEARCH", request, {"username": [username]})
 
-    response = requests.post(API_ENDPOINTS["USERFACILITY_SEARCH"], headers=headers, json={"username": [username]})
-    user_facilities = response.json() if response.status_code == 200 else []
-    return JsonResponse(user_facilities, safe=False)
-
-def update_user_facilities(request):
-    token = request.session.get("auth_token")
-    if not token:
-        return {"error": "User is not authenticated"}
-
-    headers = {"Authorization": f"Bearer {token}"}
-
+def update_user_facility(request):
     if request.method == "POST":
-        data = request.POST
-        username = data.get("username")
-        facility_nbr = request.POST.getlist("facility_nbr[]")
-        
-        response = requests.post(API_ENDPOINTS["USERFACILITY_UPSERT"], headers=headers, json={"username": username, "facility_nbr": facility_nbr})
+        return fetch_json_response_db("USERFACILITY_UPSERT", request, {
+            "username": request.POST.get("username"),
+            "facility_nbr": request.POST.getlist("facility_nbr[]"),
+        })
+    return JsonResponse({"error": "Invalid request"}, status=400)
+
+def fetch_json_response_db(endpoint_key, request, payload=None):
+    """Helper function to handle API requests with exception handling."""
+    
+    token = request.session.get("auth_token")
+    if not token:
+        return JsonResponse({"error": "User is not authenticated"}, status=401)
+
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = payload or {}
+
+    try:
+        response = requests.post(API_ENDPOINTS[endpoint_key], headers=headers, json=payload)
+        response.raise_for_status()
         return JsonResponse(response.json(), safe=False)
     
-    return JsonResponse({"error": "Invalid request"}, status=400)
+    except requests.exceptions.HTTPError as e:
+        logger.exception(f"❌HTTP error while accessing {endpoint_key}: {e}")
+        return JsonResponse({"error": f"HTTP error: {response.status_code}"}, status=response.status_code)
+    
+    except requests.exceptions.RequestException as e:
+        logger.exception(f"❌Request failed for {endpoint_key}: {e}")
+        return JsonResponse({"error": "Failed to connect to the API"}, status=500)
+    
+    except Exception as e:
+        logger.exception(f"❌Unexpected error in {endpoint_key}: {e}")
+        return JsonResponse({"error": "An unexpected error occurred"}, status=500)
+
+def fetch_json_response_cache(endpoint_key, request, payload=None):
+    """Helper function to handle API requests with exception handling."""
+    
+    token = request.session.get("auth_token")
+    if not token:
+        return JsonResponse({"error": "User is not authenticated"}, status=401)
+
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = payload or {}
+
+    try:
+        response = requests.post(API_ENDPOINTS[endpoint_key], headers=headers, json=payload)
+        logger.debug(f"Response Status: {response.status_code}")
+        
+        response.raise_for_status()  # Raise an error for HTTP failures
+
+        # Parse JSON response
+        response_json = response.json()
+        docs = response_json.get("response", {}).get("docs", [])  # Extract only "docs"
+
+        logger.debug(f"Returning {len(docs)} documents from Solr response")
+
+        return JsonResponse(docs, safe=False)  # Return only the docs array
+    
+    except requests.exceptions.HTTPError as e:
+        logger.exception(f"❌HTTP error while accessing {endpoint_key}: {e}")
+        return JsonResponse({"error": f"HTTP error: {response.status_code}"}, status=response.status_code)
+    
+    except requests.exceptions.RequestException as e:
+        logger.exception(f"❌Request failed for {endpoint_key}: {e}")
+        return JsonResponse({"error": "Failed to connect to the API"}, status=500)
+    
+    except Exception as e:
+        logger.exception(f"❌Unexpected error in {endpoint_key}: {e}")
+        return JsonResponse({"error": "An unexpected error occurred"}, status=500)
