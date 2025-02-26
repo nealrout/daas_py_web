@@ -21,16 +21,19 @@ API_PORTS = {
 
 API_ENDPOINTS = {
     "LOGIN": f"{API_BASE_URL}:{API_PORTS['auth']}/api/auth/login/",
-    # "ACCOUNT_SEARCH": f"{API_BASE_URL}:{API_PORTS['account']}/api/account/db/?facility=ALL",
-    "ACCOUNT_SEARCH": f"{API_BASE_URL}:{API_PORTS['account']}/api/account/cache/query?facility=ALL",
-    "ASSET_SEARCH": f"{API_BASE_URL}:{API_PORTS['asset']}/api/asset/db/?facility=ALL",
-    "SERVICE_SEARCH": f"{API_BASE_URL}:{API_PORTS['service']}/api/service/db/?facility=ALL",
-    "FACILITY_SEARCH": f"{API_BASE_URL}:{API_PORTS['facility']}/api/facility/db/?facility=ALL",
+    "ACCOUNT_SEARCH_DB": f"{API_BASE_URL}:{API_PORTS['account']}/api/account/db/?facility=ALL",
+    "ACCOUNT_SEARCH_CACHE": f"{API_BASE_URL}:{API_PORTS['account']}/api/account/cache/query?facility=ALL",
+    "FACILITY_SEARCH_DB": f"{API_BASE_URL}:{API_PORTS['facility']}/api/facility/db/?facility=ALL",
+    "FACILITY_SEARCH_CACHE": f"{API_BASE_URL}:{API_PORTS['facility']}/api/facility/cache/query?facility=ALL",
     "FACILITY_UPSERT": f"{API_BASE_URL}:{API_PORTS['facility']}/api/facility/db/upsert/?facility=ALL",
-    "USER_SEARCH": f"{API_BASE_URL}:{API_PORTS['user']}/api/user/db/?facility=ALL",
-    "USER_UPSERT": f"{API_BASE_URL}:{API_PORTS['user']}/api/user/db/upsert/?facility=ALL",
-    "USERFACILITY_SEARCH": f"{API_BASE_URL}:{API_PORTS['userfacility']}/api/userfacility/db/?facility=ALL",
-    "USERFACILITY_UPSERT": f"{API_BASE_URL}:{API_PORTS['userfacility']}/api/userfacility/db/upsert/?facility=ALL",
+    "ASSET_SEARCH_CACHE": f"{API_BASE_URL}:{API_PORTS['asset']}/api/asset/cache/query?facility=ALL",
+    "ASSET_SEARCH_DB": f"{API_BASE_URL}:{API_PORTS['asset']}/api/asset/db/?facility=ALL",
+    "SERVICE_SEARCH_CACHE": f"{API_BASE_URL}:{API_PORTS['service']}/api/service/cache/query?facility=ALL",
+    "SERVICE_SEARCH_DB": f"{API_BASE_URL}:{API_PORTS['service']}/api/service/cache/?facility=ALL",
+    "USER_SEARCH_DB": f"{API_BASE_URL}:{API_PORTS['user']}/api/user/db/?facility=ALL",
+    "USER_UPSERT_DB": f"{API_BASE_URL}:{API_PORTS['user']}/api/user/db/upsert/?facility=ALL",
+    "USERFACILITY_SEARCH_DB": f"{API_BASE_URL}:{API_PORTS['userfacility']}/api/userfacility/db/?facility=ALL",
+    "USERFACILITY_UPSERT_DB": f"{API_BASE_URL}:{API_PORTS['userfacility']}/api/userfacility/db/upsert/?facility=ALL",
 }
 
 def login_view(request):
@@ -101,34 +104,49 @@ def dashboard_view(request):
 
 def fetch_tab_data(request, tab_name):
     """Fetch data based on the selected tab (Account, Facility, Asset, Service)"""
-    if tab_name.upper()+"_SEARCH" not in API_ENDPOINTS:
+    if tab_name.upper()+"_SEARCH_CACHE" not in API_ENDPOINTS:
         return JsonResponse({"error": "Invalid tab selected"}, status=400)
     
     search_query = request.GET.get("search", "").strip()
 
     payload = {"q": "*:*", "rows": configs.SOLR_MAX_ROW}
 
-    if tab_name.upper() == configs.DOMAIN_NAME_ACCOUNT:
-        if search_query:
-            fq = {"fq": f"account_nbr:(*{search_query}*) OR account_code:(*{search_query}*) OR account_name:(*{search_query}*)"}
-            payload = {**payload, **fq} 
+    if search_query:
+        if tab_name.upper() == configs.DOMAIN_NAME_ACCOUNT:
+            fq = {"fq": f"""account_nbr:(*{search_query}*) 
+                            OR account_code:(*{search_query}*) 
+                            OR account_name:(*{search_query}*)"""}
+                            
+        elif tab_name.upper() == configs.DOMAIN_NAME_FACILITY:
+            fq = {"fq": f"""account_nbr:(*{search_query}*) 
+                            OR facility_nbr:(*{search_query}*) 
+                            OR facility_code:(*{search_query}*) 
+                            OR facility_name:(*{search_query}*)"""} 
+                            
+        elif tab_name.upper() == configs.DOMAIN_NAME_ASSET:
+            fq = {"fq": f"""account_nbr:(*{search_query}*) 
+                            OR facility_nbr:(*{search_query}*) 
+                            OR asset_nbr:(*{search_query}*) 
+                            OR sys_id:(*{search_query}*) 
+                            OR asset_code:(*{search_query}*) 
+                            OR status_code:(*{search_query}*)"""} 
+                            
+        elif tab_name.upper() == configs.DOMAIN_NAME_SERVICE:
+            fq = {"fq": f"""account_nbr:(*{search_query}*) 
+                            OR facility_nbr:(*{search_query}*) 
+                            OR asset_nbr:(*{search_query}*) 
+                            OR service_nbr:(*{search_query}*) 
+                            OR service_code:(*{search_query}*) 
+                            OR service_name:(*{search_query}*) 
+                            OR status_code:(*{search_query}*)"""}
 
-        logger.debug(f"payload: {payload}")
-        return fetch_json_response_cache(tab_name.upper() + "_SEARCH", request, payload)
-        
-    elif tab_name.upper() == configs.DOMAIN_NAME_FACILITY:
-        logger.debug("")
-    elif tab_name.upper() == configs.DOMAIN_NAME_ASSET:
-        logger.debug("")
-    elif tab_name.upper() == configs.DOMAIN_NAME_SERVICE:
-        logger.debug("")
 
-    # payload = {"search": search_query} if search_query else {}
-    
-    logger.debug(f"search_query: {search_query}")
-    # logger.debug(f"search payload: {payload}")
-    
-    return fetch_json_response_db(tab_name.upper() + "_SEARCH", request)
+        logger.debug(f"search_query: {search_query}")
+        payload = {**payload, **fq} 
+
+    logger.debug(f"search payload: {payload}")
+    return fetch_json_response_cache(tab_name.upper() + "_SEARCH_CACHE", request, payload)
+    # return fetch_json_response_db(tab_name.upper() + "_SEARCH", request)
 
 def dashboard_og_view(request):
     token = request.session.get("auth_token")
@@ -136,10 +154,10 @@ def dashboard_og_view(request):
         return redirect("login")
 
     context = {
-        "account": fetch_data(API_ENDPOINTS["ACCOUNT_SEARCH"], request),
-        "facility": fetch_data(API_ENDPOINTS["FACILITY_SEARCH"], request),
-        "asset": fetch_data(API_ENDPOINTS["ASSET_SEARCH"], request),
-        "service": fetch_data(API_ENDPOINTS["SERVICE_SEARCH"], request),
+        "account": fetch_data(API_ENDPOINTS["ACCOUNT_SEARCH_CACHE"], request),
+        "facility": fetch_data(API_ENDPOINTS["FACILITY_SEARCH_CACHE"], request),
+        "asset": fetch_data(API_ENDPOINTS["ASSET_SEARCH_CACHE"], request),
+        "service": fetch_data(API_ENDPOINTS["SERVICE_SEARCH_CACHE"], request),
     }
 
     return render(request, "dashboard_og.html", context)
@@ -169,22 +187,22 @@ def userfacility_assignment(request):
 
 
 def get_account(request):
-    return fetch_json_response_db("ACCOUNT_SEARCH", request)
+    return fetch_json_response_db("ACCOUNT_SEARCH_CACHE", request)
 
 def get_facility(request):
-    return fetch_json_response_db("FACILITY_SEARCH", request)
+    return fetch_json_response_db("FACILITY_SEARCH_CACHE", request)
 
 def get_asset(request):
-    return fetch_json_response_db("ASSET_SEARCH", request)
+    return fetch_json_response_db("ASSET_SEARCH_CACHE", request)
 
 def get_service(request):
-    return fetch_json_response_db("SERVICE_SEARCH", request)
+    return fetch_json_response_db("SERVICE_SEARCH_CACHE", request)
 
 def get_user(request):
-    return fetch_json_response_db("USER_SEARCH", request)
+    return fetch_json_response_db("USER_SEARCH_DB", request)
 
 def get_user_facility(request, username):
-    return fetch_json_response_db("USERFACILITY_SEARCH", request, {"username": [username]})
+    return fetch_json_response_db("USERFACILITY_SEARCH_DB", request, {"username": [username]})
 
 def update_user_facility(request):
     if request.method == "POST":
