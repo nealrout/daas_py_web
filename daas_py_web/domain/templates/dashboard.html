@@ -33,6 +33,30 @@
             border: 1px solid #ccc;
             padding: 10px;
         }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 8px;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+        th {
+            cursor: pointer;
+            background-color: #f4f4f4;
+        }
+        th.sorted-asc::after {
+            content: " ▲";
+        }
+        th.sorted-desc::after {
+            content: " ▼";
+        }
+        .filter-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 4px;
+        }
     </style>
 </head>
 <body>
@@ -60,34 +84,24 @@
 
     <script>
         $(document).ready(function() {
-            let selectedTab = "account";  // Default tab
+            let selectedTab = "account";  
+            let tableData = []; 
+            let filteredData = []; 
+            let sortColumn = null;
+            let sortDirection = "asc";
+            let filters = {}; 
     
             function fetchData() {
-                let searchQuery = $("#search-input").val().trim();  // Get input value
+                let searchQuery = $("#search-input").val().trim();  
                 $("#data-grid").html("<p>Loading...</p>");
                 $.ajax({
                     url: `/fetch-tab-data/${selectedTab}/`,
                     method: "GET",
-                    data: { search: searchQuery },  // Send search query
+                    data: { search: searchQuery },
                     success: function(data) {
-                        if (data.length === 0) {
-                            $("#data-grid").html("<p>No records found.</p>");
-                        } else {
-                            let table = "<table border='1' width='100%'><tr>";
-                            Object.keys(data[0]).forEach(key => {
-                                table += `<th>${key}</th>`;
-                            });
-                            table += "</tr>";
-                            data.forEach(row => {
-                                table += "<tr>";
-                                Object.values(row).forEach(value => {
-                                    table += `<td>${value}</td>`;
-                                });
-                                table += "</tr>";
-                            });
-                            table += "</table>";
-                            $("#data-grid").html(table);
-                        }
+                        tableData = data; 
+                        filteredData = [...tableData]; 
+                        renderTable();
                     },
                     error: function(err) {
                         $("#data-grid").html("<p>Error fetching data.</p>");
@@ -95,30 +109,117 @@
                 });
             }
     
-            // Handle tab click
+            function renderTable() {
+                if (filteredData.length === 0) {
+                    $("#data-grid").html("<p>No records found.</p>");
+                    return;
+                }
+    
+                let table = "<table id='sortable-table'><thead><tr>";
+    
+                Object.keys(filteredData[0]).forEach((key) => {
+                    let sortClass = key === sortColumn ? (sortDirection === "asc" ? "sorted-asc" : "sorted-desc") : "";
+                    table += `<th class="${sortClass}" data-column="${key}" onclick="sortTable('${key}')">${key}</th>`;
+                });
+    
+                table += "</tr><tr>";
+    
+                Object.keys(filteredData[0]).forEach((key) => {
+                    let filterValue = filters[key] || "";
+                    table += `<td><input type="text" class="filter-input" data-column="${key}" value="${filterValue}" placeholder="Filter..."></td>`;
+                });
+    
+                table += "</tr></thead><tbody>";
+    
+                filteredData.forEach(row => {
+                    table += "<tr>";
+                    Object.values(row).forEach(value => {
+                        table += `<td>${value}</td>`;
+                    });
+                    table += "</tr>";
+                });
+    
+                table += "</tbody></table>";
+                $("#data-grid").html(table);
+    
+                $(".filter-input").on("input", function() {
+                    filters[$(this).data("column")] = $(this).val(); 
+                    applyFilters();
+                });
+            }
+    
+            function applyFilters() {
+                let focusedElement = document.activeElement; // Store focused input element
+                let focusedColumn = $(focusedElement).data("column"); 
+                let focusedValue = $(focusedElement).val(); 
+    
+                filteredData = tableData.filter(row => {
+                    return Object.keys(filters).every(column => {
+                        let filterValue = filters[column].toLowerCase();
+                        return row[column].toString().toLowerCase().includes(filterValue);
+                    });
+                });
+    
+                renderFilteredRows(); 
+    
+                // Restore focus on the correct input field
+                if (focusedColumn !== undefined) {
+                    let inputField = $(`.filter-input[data-column="${focusedColumn}"]`);
+                    inputField.focus();
+                    inputField.val(focusedValue); // Ensure value persists after focusing
+                }
+            }
+    
+            function renderFilteredRows() {
+                $("#sortable-table tbody").empty(); // Clear only rows, not headers/inputs
+                filteredData.forEach(row => {
+                    let rowHTML = "<tr>";
+                    Object.values(row).forEach(value => {
+                        rowHTML += `<td>${value}</td>`;
+                    });
+                    rowHTML += "</tr>";
+                    $("#sortable-table tbody").append(rowHTML);
+                });
+            }
+    
+            window.sortTable = function(column) {
+                if (sortColumn === column) {
+                    sortDirection = sortDirection === "asc" ? "desc" : "asc"; 
+                } else {
+                    sortColumn = column;
+                    sortDirection = "asc"; 
+                }
+    
+                filteredData.sort((a, b) => {
+                    let valA = a[column] || "";
+                    let valB = b[column] || "";
+    
+                    if (!isNaN(valA) && !isNaN(valB)) {
+                        return sortDirection === "asc" ? valA - valB : valB - valA;
+                    }
+    
+                    return sortDirection === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                });
+    
+                renderFilteredRows();
+            };
+    
             $(".tab").click(function() {
                 $(".tab").removeClass("active");
                 $(this).addClass("active");
                 selectedTab = $(this).data("tab");
-                fetchData();  // Load data for new tab
+                sortColumn = null; 
+                filters = {}; 
+                fetchData();
             });
     
-            // Handle search button click
-            $("#search-btn").click(function() {
-                fetchData();  // Fetch filtered results
-            });
-    
-            // Handle Enter key press in search box
+            $("#search-btn").click(fetchData);
             $("#search-input").keypress(function(event) {
-                if (event.which == 13) {  // Enter key pressed
-                    fetchData();
-                }
+                if (event.which == 13) fetchData();
             });
     
-            // Initial data fetch for the default tab
             fetchData();
         });
-    </script>    
-
+    </script>  
 </body>
 </html>
