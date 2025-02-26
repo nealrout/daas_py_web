@@ -206,7 +206,7 @@ def get_user_facility(request, username):
 
 def update_user_facility(request):
     if request.method == "POST":
-        return fetch_json_response_db("USERFACILITY_UPSERT", request, {
+        return fetch_json_response_db("USERFACILITY_UPSERT_DB", request, {
             "username": request.POST.get("username"),
             "facility_nbr": request.POST.getlist("facility_nbr[]"),
         })

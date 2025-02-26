@@ -24,13 +24,30 @@
             border: 1px solid #000;
             padding: 10px;
             flex: 1;
+            min-width: 200px;
+        }
+        #userList, #facilityList {
+            width: 100%;
         }
         .full-width {
             width: 100%;
+            display: flex;
+            flex-direction: column; /* Ensures contents stay inside */
+            overflow: hidden; /* Prevents overflow */
+        }
+        #assignedFacilityList {
+            width: 100%;
+            max-width: 100%; /* Ensures it stays within parent */
             word-wrap: break-word;
             overflow-wrap: break-word;
+            white-space: normal;
+            box-sizing: border-box; /* Includes padding/borders in width */
+            padding: 10px;
+            border: 1px solid #000;
+            background-color: #1e1e1e; /* Adjust color if needed */
+            overflow-y: auto; /* Enables scrolling if content is too large */
         }
-        .facility-box {
+        .assignedfacility-box {
             width: 100%;
             height: 150px; /* Adjust height as needed */
             border: 1px solid #000;
@@ -42,7 +59,7 @@
             align-items: flex-start;
             white-space: normal;
         }
-        .facility-item {
+        .assignedFacility-item {
             background: #f4f4f4;
             padding: 5px;
             margin: 2px;
@@ -63,18 +80,18 @@
         <div class="top-row">
             <div class="box">
                 <h3>Users</h3>
-                <select id="userList" size="10"></select>
+                <select id="userList" size="15"></select>
             </div>
             <div class="box">
                 <h3>Facilities</h3>
-                <select id="facilityList" size="10" multiple></select>
+                <select id="facilityList" size="15" multiple></select>
             </div>
         </div>
 
         <!-- Full-width row: Assigned Facilities -->
         <div class="box full-width">
             <h3>Assigned Facilities</h3>
-            <div id="assignedFacilityList" class="facility-box"></div>
+            <div id="assignedFacilityList" class="assignedfacility-box"></div>
             <button class="button" id="assignFacilities">Assign Selected</button>
         </div>
     </div>
@@ -118,7 +135,7 @@
                 if (Array.isArray(data)) {
                     data.forEach(facility => {
                         $('#assignedFacilityList').append(
-                            `<span class="facility-item">${facility.facility_nbr}</span>`
+                            `<span class="assignedFacility-item">${facility.facility_nbr}</span>`
                         );
                     });
                 } else {
