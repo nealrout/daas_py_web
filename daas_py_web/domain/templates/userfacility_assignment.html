@@ -6,26 +6,92 @@
     <title>User Facility Management</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        .container { display: flex; gap: 20px; }
-        .box { border: 1px solid #000; padding: 10px; width: 30%; }
-        .button { margin-top: 10px; }
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 800px;
+            margin: auto;
+        }
+        .top-row {
+            display: flex;
+            gap: 20px;
+        }
+        .box {
+            border: 1px solid #000;
+            padding: 10px;
+            flex: 1;
+            min-width: 200px;
+        }
+        #userList, #facilityList {
+            width: 100%;
+        }
+        .full-width {
+            width: 100%;
+            display: flex;
+            flex-direction: column; /* Ensures contents stay inside */
+            overflow: hidden; /* Prevents overflow */
+        }
+        #assignedFacilityList {
+            width: 100%;
+            max-width: 100%; /* Ensures it stays within parent */
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
+            box-sizing: border-box; /* Includes padding/borders in width */
+            padding: 10px;
+            border: 1px solid #000;
+            background-color: #1e1e1e; /* Adjust color if needed */
+            overflow-y: auto; /* Enables scrolling if content is too large */
+        }
+        .assignedfacility-box {
+            width: 100%;
+            height: 150px; /* Adjust height as needed */
+            border: 1px solid #000;
+            padding: 10px;
+            overflow-y: auto; /* Enables scrolling if content exceeds box */
+            display: flex;
+            flex-wrap: wrap; /* Allows text to wrap */
+            gap: 5px;
+            align-items: flex-start;
+            white-space: normal;
+        }
+        .assignedFacility-item {
+            background: #f4f4f4;
+            padding: 5px;
+            margin: 2px;
+            border-radius: 4px;
+        }
+        .button {
+            margin-top: 10px;
+            display: block;
+        }
     </style>
 </head>
 <body>
     <input type="hidden" id="csrf_token" value="{{ csrf_token }}">
     <h1>User Facility Management</h1>
+
     <div class="container">
-        <div class="box">
-            <h3>Users</h3>
-            <select id="userList" size="10"></select>
+        <!-- Top Row: Users & Facilities -->
+        <div class="top-row">
+            <div class="box">
+                <h3>Users</h3>
+                <select id="userList" size="15"></select>
+            </div>
+            <div class="box">
+                <h3>Facilities</h3>
+                <select id="facilityList" size="15" multiple></select>
+            </div>
         </div>
-        <div class="box">
-            <h3>Facilities</h3>
-            <select id="facilityList" size="10" multiple></select>
-        </div>
-        <div class="box">
+
+        <!-- Full-width row: Assigned Facilities -->
+        <div class="box full-width">
             <h3>Assigned Facilities</h3>
-            <select id="assignedFacilityList" size="10" multiple></select>
+            <div id="assignedFacilityList" class="assignedfacility-box"></div>
             <button class="button" id="assignFacilities">Assign Selected</button>
         </div>
     </div>
@@ -64,10 +130,17 @@
 
         function fetchUserFacilities(username) {
             $.get(`/get_user_facility/${username}/`, function(data) {
-                $('#assignedFacilityList').empty();
-                data.forEach(facility => {
-                    $('#assignedFacilityList').append(`<option value="${facility.facility_nbr}">${facility.facility_nbr}</option>`);
-                });
+                $('#assignedFacilityList').empty(); // Clear previous entries
+
+                if (Array.isArray(data)) {
+                    data.forEach(facility => {
+                        $('#assignedFacilityList').append(
+                            `<span class="assignedFacility-item">${facility.facility_nbr}</span>`
+                        );
+                    });
+                } else {
+                    console.error("Invalid data format:", data);
+                }
             });
         }
 
