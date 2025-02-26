@@ -8,7 +8,7 @@ from django.http import JsonResponse
 
 configs = config.get_configs()
 
-API_BASE_URL = "http://127.0.0.1"
+API_BASE_URL = configs.API_BASE_URL
 API_PORTS = {
     "auth": int(configs.AUTH_PORT),
     "account": int(configs.DOMAIN_PORT_ACCOUNT),
@@ -187,16 +187,16 @@ def userfacility_assignment(request):
 
 
 def get_account(request):
-    return fetch_json_response_db("ACCOUNT_SEARCH_CACHE", request)
+    return fetch_json_response_db("ACCOUNT_SEARCH_DB", request)
 
 def get_facility(request):
-    return fetch_json_response_db("FACILITY_SEARCH_CACHE", request)
+    return fetch_json_response_db("FACILITY_SEARCH_DB", request)
 
 def get_asset(request):
-    return fetch_json_response_db("ASSET_SEARCH_CACHE", request)
+    return fetch_json_response_db("ASSET_SEARCH_DB", request)
 
 def get_service(request):
-    return fetch_json_response_db("SERVICE_SEARCH_CACHE", request)
+    return fetch_json_response_db("SERVICE_SEARCH_DB", request)
 
 def get_user(request):
     return fetch_json_response_db("USER_SEARCH_DB", request)
